@@ -1,0 +1,230 @@
+const { ROLES } = require("../utils/constants");
+const Review = require("../models/Review");
+// const Review = require("../models/Review");
+const Product = require("../models/Product");
+
+// const createReview = async (req, res) => {
+//   if (req.role !== ROLES.user) {
+//     return res.status(401).json({ success: false, message: "Access denied" });
+//   }
+
+//   const userId = req.id;
+
+//   try {
+//     const { productId, review, rating } = req.body;
+
+//     const newReview = await Review.create({
+//       productId,
+//       review,
+//       userId,
+//       rating,
+//     });
+
+//     newReview.populate("userId", "name");
+//     // await newReview.populate("userId", "name");
+
+//     let product = await Product.findByIdAndUpdate(productId, {
+//       $push: { reviews: newReview._id },
+//     });
+
+//     // console.log("Review",product)
+
+//     await product.calculateRating();
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Thanks for the review",
+//       data: newReview,
+//     });
+
+//   } catch (error) {
+//     return res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
+const createReview = async (req, res) => {
+  if (req.role !== ROLES.user) {
+    return res.status(401).json({ success: false, message: "Access denied" });
+  }
+
+  const userId = req.id;
+
+  try {
+    const { productId, review, rating } = req.body;
+
+    const newReview = await Review.create({
+      productId,
+      review,
+      userId,
+      rating,
+    });
+
+    await newReview.populate("userId", "name");
+
+    let product = await Product.findByIdAndUpdate(
+      productId,
+      { $push: { reviews: newReview._id } },
+      { new: true }
+    );
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    if (typeof product.calculateRating === "function") {
+      await product.calculateRating();
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Thanks for the review",
+      data: newReview,
+    });
+  } catch (error) {
+    console.error("CREATE REVIEW ERROR:", error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+
+const updateReview = async (req, res) => {
+  if (req.role !== ROLES.user) {
+    return res.status(401).json({ success: false, message: "Access denied" });
+  }
+
+  try {
+    const { id } = req.params;
+    const { updateReview } = req.body;
+
+    let review = await Review.findByIdAndUpdate(
+      id,
+      { review: updateReview },
+      { new: true },
+    );
+
+    await review.populate("userId", "name");
+
+    if (!review) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Review not found" });
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, data: review, message: "Review updated" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const replayReview = async (req, res) => {
+  if (req.role !== ROLES.user) {
+    return res.status(401).json({ success: false, message: "Access denied" });
+  }
+
+  const userId = req.id;
+  const { id } = req.params;
+
+  try {
+    const { review } = req.body;
+
+    let foundReview = await Review.findByIdAndUpdate(
+      { _id: id },
+      { $push: { replies: { userId, review } } },
+      { new: true },
+    )
+      .populate("replies.userId", "name")
+      .populate("userId", "name");
+
+    if (!foundReview) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Review not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: foundReview,
+      message: "Reply added successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const deleteReview = async (req, res) => {
+  if (req.role !== ROLES.user) {
+    return res.status(401).json({ success: false, message: "Access denied" });
+  }
+
+  try {
+    const { id } = req.params;
+
+    //  Proper delete
+    let review = await Review.findByIdAndDelete(id);
+
+    if (!review) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Review not found" });
+    }
+
+    // Remove review from product
+    let product = await Product.findByIdAndUpdate(review.productId, {
+      $pull: { reviews: review._id },
+    });
+
+    if (product) {
+      await product.calculateRating();
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Review deleted",
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getReviews = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let reviews = await Review.find({ productId: id })
+      .populate({
+        path: "userId",
+        select: "name",
+      })
+      .populate({
+        path: "replies.userId",
+        select: "name",
+      });
+
+      // console.log("Review",reviews)
+
+    if (!reviews) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Review not found" });
+    }
+
+    return res
+      .status(200)
+      .json({ success: true, data: reviews, message: "Reviews found" });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = {
+  createReview,
+  updateReview,
+  replayReview,
+  deleteReview,
+  getReviews,
+};
