@@ -21,7 +21,12 @@ const orderRoutes = require("./routes/OrderRoutes")
 const reviewRoutes = require("./routes/ReviewRoutes")
 
 // handing connection errors
-app.use(cors({ origin: process.env.CLIENT_URL }));
+// app.use(cors({ origin: process.env.CLIENT_URL }));
+app.use(
+  cors({
+    origin: "https://mern-frontend-nine-iota.vercel.app",
+  })
+);
 app.use(express.json());
 
 connectDb();
